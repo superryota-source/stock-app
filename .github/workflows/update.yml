@@ -1,0 +1,46 @@
+name: update-data
+on:
+  schedule:
+    - cron: "30 7 * * 1-5"
+    - cron: "30 22 * * 0-4"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    env:
+      AFTER_CLOSE: ${{ github.event_name == 'workflow_dispatch' || github.event.schedule == '30 7 * * 1-5' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: 株価取得と公式データ照合
+        if: env.AFTER_CLOSE == 'true'
+        run: python fetch_data.py
+        env:
+          JQUANTS_API_KEY: ${{ secrets.JQUANTS_API_KEY }}
+          STOOQ_API_KEY: ${{ secrets.STOOQ_API_KEY }}
+          HOLDINGS: ${{ secrets.HOLDINGS }}
+      - name: 経済ニュース取得と要約
+        run: python fetch_news.py
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      - name: 売り時の通知
+        if: env.AFTER_CLOSE == 'true'
+        run: python alerts.py
+        env:
+          HOLDINGS: ${{ secrets.HOLDINGS }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+      - name: 結果をコミット
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@users.noreply.github.com"
+          for f in data.json news.json; do [ -f "$f" ] && git add "$f"; done
+          if ! git diff --staged --quiet; then
+            git commit -m "update data"
+            git pull --rebase
+            git push
+          fi
