@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8"><title>株ダッシュボード</title>
+<link rel="manifest" href="manifest.json"><link rel="apple-touch-icon" href="icon-192.png"><meta name="theme-color" content="#0e7c66"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="株"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1b1f24;--mu:#667085;--bd:#e3e6ea;--up:#d92d20;--dn:#1570ef;--ac:#0e7c66;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#111418;--card:#1a1f26;--tx:#e8eaed;--mu:#9aa3af;--bd:#2c333d;--up:#f97066;--dn:#528bff;--ac:#32d5a8;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#111418;--card:#1a1f26;--tx:#e8eaed;--mu:#9aa3af;--bd:#2c333d;--up:#f97066;--dn:#528bff;--ac:#32d5a8;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.6 -apple-system,"Hiragino Sans","Noto Sans JP",sans-serif}
+main{max-width:860px;margin:0 auto;padding:12px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin:10px 0}
+h1{font-size:19px;margin:6px 0}h2{font-size:16px;margin:0 0 8px}
+nav{display:flex;gap:6px;overflow-x:auto;padding:4px 0}
+nav button,.btn{background:var(--card);color:var(--tx);border:1px solid var(--bd);border-radius:20px;padding:7px 14px;font-size:14px;white-space:nowrap;cursor:pointer}
+nav button.on,.btn.p{background:var(--ac);color:#fff;border-color:var(--ac)}
+input,textarea,select{background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:8px;font-size:15px;width:100%;box-sizing:border-box}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1;min-width:90px}
+.tbl{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px}th,td{padding:6px 8px;border-bottom:1px solid var(--bd);text-align:left;white-space:nowrap}
+.tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;border:1px solid var(--bd)}
+.buy{color:var(--up)}.sell{color:var(--dn)}.mu{color:var(--mu);font-size:13px}
+#lock{max-width:320px;margin:30vh auto;text-align:center}
+svg{width:100%;height:auto}a{color:var(--ac)}
+nav{position:fixed;left:0;right:0;bottom:0;z-index:20;display:flex;gap:0;padding:0 0 env(safe-area-inset-bottom,0px);background:var(--card);border-top:1px solid var(--bd);overflow:visible}
+nav button{flex:1;border:0;border-radius:0;background:transparent;padding:7px 2px;font-size:11px;line-height:1.3;white-space:normal}
+nav button.on{background:transparent;color:var(--ac);font-weight:700}
+nav button b{display:block;font-size:20px;font-weight:400}
+main{padding-bottom:92px}
+.btn,input,select{min-height:44px}
+input,select,textarea{font-size:16px}
+body{-webkit-tap-highlight-color:transparent;overscroll-behavior-y:contain}
+</style></head><body>
+<div id="lock" class="card"><h1>🔒 株ダッシュボード</h1><input id="pw" type="password" inputmode="numeric" placeholder="パスワード"><p id="err" class="mu"></p><button class="btn p" id="go">開く</button></div>
+<main id="app" hidden>
+<h1>📈 株ダッシュボード</h1>
+<div class="card mu" id="banner">⚠️ 現在は<b>サンプルデータ</b>で動作しています(実際の株価ではありません)。判定は簡易テクニカルルールによる参考情報で、投資助言ではありません。</div>
+<nav id="nav"></nav><div id="view"></div>
+</main>
+<script>
+const PW="1202";
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function store(k,v){try{if(v===undefined){const r=localStorage.getItem(k);return r?JSON.parse(r):null}localStorage.setItem(k,JSON.stringify(v))}catch(e){return null}}
+function enter(){if($("#pw").value===PW){$("#lock").hidden=true;$("#app").hidden=false;init()}else $("#err").textContent="パスワードが違います"}
+$("#go").onclick=enter;$("#pw").onkeydown=e=>{if(e.key==="Enter")enter()};
+
+/* ---- データ ---- */
+function rng(s){return()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function gen(seed){const r=rng(seed),a=[];let p=800+r()*2500;const d1=(r()-.45)*.004,d2=(r()-.45)*.006;for(let i=0;i<160;i++){p*=1+(i<110?d1:d2)+(r()-.5)*.028;a.push(+p.toFixed(1))}return a}
+const NAMES=[["1001","サンプル電機"],["1002","サンプル自動車"],["1003","サンプル銀行"],["1004","サンプル商事"],["1005","サンプル製薬"],["1006","サンプル半導体"],["1007","サンプル小売"],["1008","サンプル海運"]];
+let DATA=store("data")||NAMES.map(([c,n],i)=>({code:c,name:n,p:gen(i*97+13)}));
+let HOLD=store("hold")||[];
+let MEMO=store("memo")||"例)・日銀会合の結果\n・米CPI/雇用統計の予定\n・為替(ドル円)の水準\n・決算発表シーズンの注目点";
+
+/* ---- 指標 ---- */
+const sma=(a,n,o=0)=>{const e=a.length-o;if(e<n)return null;let s=0;for(let i=e-n;i<e;i++)s+=a[i];return s/n};
+function ema(a,n){const k=2/(n+1);let e=a[0];const o=[e];for(let i=1;i<a.length;i++){e=a[i]*k+e*(1-k);o.push(e)}return o}
+function rsi(a,n=14){let g=0,l=0;for(let i=a.length-n;i<a.length;i++){const d=a[i]-a[i-1];d>0?g+=d:l-=d}return l===0?100:100-100/(1+g/l)}
+function macd(a){const e12=ema(a,12),e26=ema(a,26),m=e12.map((v,i)=>v-e26[i]),s=ema(m,9),h=m.map((v,i)=>v-s[i]);return{m:m.at(-1),s:s.at(-1),h:h.at(-1),hp:h.at(-2)}}
+function an(a){const last=a.at(-1),s20=sma(a,20),s50=sma(a,50),s20p=sma(a,20,5),s50p=sma(a,50,5),r=rsi(a),M=macd(a);
+ let sw=0,mo=0;const rs=[];
+ if(last>s20){sw+=2;rs.push("20日線の上")}else rs.push("20日線割れ");
+ if(s20>s20p){sw+=1;rs.push("短期上向き")}
+ if(r>=40&&r<=65){sw+=2;rs.push("RSI "+r.toFixed(0)+"(過熱なし)")}else if(r>75){sw-=2;rs.push("RSI過熱")}
+ if(M.h>0&&M.h>M.hp){sw+=1;rs.push("MACD改善")}
+ if(last>s50&&Math.abs(last/s20-1)<.03){sw+=1;rs.push("押し目圏")}
+ if(last>s50){mo+=2}else mo-=1;
+ if(s20>s50){mo+=2;rs.push("20>50日線")}
+ if(s50>s50p)mo+=1;if(M.m>0)mo+=1;if(r>78)mo-=2;
+ return{last,s20,s50,r,M,sw,mo,rs,chg:(last/a.at(-2)-1)*100}}
+const f=(x,d=0)=>x.toLocaleString("ja-JP",{maximumFractionDigits:d,minimumFractionDigits:d});
+const pc=x=>`<span class="${x>=0?"buy":"sell"}">${x>=0?"+":""}${x.toFixed(1)}%</span>`;
+
+function loadRemote(){fetch("data.json",{cache:"no-store"}).then(r=>{if(!r.ok)throw 0;return r.json()}).then(j=>{const L=(j.stocks||[]).filter(s=>s.close&&s.close.length>=60);if(!L.length)return;DATA=L.map(s=>({code:s.code,name:s.name,p:s.close,q:s.quality}));sel=0;$("#banner").innerHTML="📡 自動取得データ(最終更新: "+esc(String(j.generated).replace("T"," "))+")。最新値をJ-Quants公式データと照合済み。判定は参考情報で、投資助言ではありません。";render()}).catch(()=>{})}
+let NEWS=null;
+function loadNews(){fetch("news.json",{cache:"no-store"}).then(r=>{if(!r.ok)throw 0;return r.json()}).then(j=>{NEWS=j;render()}).catch(()=>{})}
+/* ---- 画面 ---- */
+const TABS=["📊|概要","🔥|買い候補","💼|保有","📈|チャート","🧮|ツール"];let tab=0,sel=0;
+function init(){$("#nav").innerHTML=TABS.map((t,i)=>`<button data-i="${i}">${t.split("|").length>1?`<b>${t.split("|")[0]}</b>${t.split("|")[1]}`:t}</button>`).join("");$("#nav").onclick=e=>{const i=(e.target.closest("button")||{dataset:{}}).dataset.i;if(i!==undefined){tab=+i;render()}};render();loadRemote();loadNews()}
+function render(){[...$("#nav").children].forEach((b,i)=>b.classList.toggle("on",i===tab));$("#view").innerHTML=[vOver,vBuy,vHold,vChart,vTool][tab]();bind()}
+const A=()=>DATA.map(d=>({...d,a:an(d.p)}));
+const nw=()=>{if(!NEWS)return`<div class="card"><h2>📰 最新の経済動向</h2><p class="mu">news.json がまだありません(自動更新の初回実行後に表示されます)。</p></div>`;
+const ok=u=>/^https?:\/\//.test(u),H=NEWS.headlines||[];
+return`<div class="card"><h2>📰 最新の経済動向</h2><p class="mu">更新: ${esc(String(NEWS.generated||"").replace("T"," "))}${NEWS.ai?" / AI要約(根拠は見出しのみ)":" / 見出し一覧のみ"}</p>${NEWS.summary?`<div style="white-space:pre-wrap">${esc(NEWS.summary)}</div>`:""}<details><summary class="mu">見出し一覧(${H.length}件)</summary><ul>${H.map(h=>`<li>${ok(h.link)?`<a href="${esc(h.link)}" target="_blank" rel="noopener">${esc(h.title)}</a>`:esc(h.title)} <span class="mu">${esc(h.source||"")}</span></li>`).join("")}</ul></details></div>`};
+const wn=()=>{const w=DATA.filter(d=>d.q&&d.q.status==="warn");return w.length?`<p class="sell">⚠️ データ要確認(候補から除外): ${w.map(d=>esc(d.code+" "+d.name+"("+d.q.detail+")")).join("、")}</p>`:""};
+
+function vOver(){const L=A(),n=L.length,up=L.filter(x=>x.a.last>x.a.s50).length,ar=L.reduce((s,x)=>s+x.a.r,0)/n,hot=L.filter(x=>x.a.r>70).length,mm=L.filter(x=>x.a.M.h>0).length;
+ const tone=up/n>.6&&ar<70?"強気(上昇基調)":up/n<.4?"弱気(下落基調)":"中立(方向感を探る局面)";
+ return `<div class="card"><h2>地合いの要約</h2><p>総合判定:<b>${tone}</b></p><ul>
+ <li>トレンド:50日線より上の銘柄は ${up}/${n}(${(up/n*100).toFixed(0)}%)</li>
+ <li>過熱感:平均RSI ${ar.toFixed(0)}、RSI70超は${hot}銘柄</li>
+ <li>勢い:MACDが買い優勢の銘柄は${mm}/${n}</li></ul>
+ <p class="mu">${hot>n/3?"過熱銘柄が多く、新規買いは押し目を待つのが無難です。":up/n>.6?"広く上昇しているため、順張りのスイングが機能しやすい局面です。":"選別が必要な局面です。強い銘柄に絞りましょう。"}</p>${wn()}</div>
+ ${nw()}<div class="card"><h2>経済動向メモ(自由に編集)</h2><textarea id="memo" rows="6">${esc(MEMO)}</textarea><p class="mu">金利・為替・決算・指標発表などを書き留めておく欄です。自動取得には外部データAPIの接続が必要です。</p></div>`}
+
+function pick(key){return A().filter(x=>x.a[key]>=3&&!(x.q&&x.q.status==="warn")).sort((a,b)=>b.a[key]-a.a[key]).slice(0,4)}
+function vBuy(){const g=(t,k,h)=>{const L=pick(k);return `<div class="card"><h2>${t}</h2><p class="mu">${h}</p>`+(L.length?`<div class="tbl"><table><tr><th>銘柄</th><th>現値</th><th>前日比</th><th>点</th><th>損切り目安</th><th>根拠</th></tr>${L.map(x=>`<tr><td>${x.code} ${esc(x.name)}</td><td>${f(x.a.last)}</td><td>${pc(x.a.chg)}</td><td>${x.a[k]}</td><td>${f(x.a.last*(k==="sw"?.95:.92))}</td><td>${x.a.rs.slice(0,3).join("・")}</td></tr>`).join("")}</table></div>`:"<p>該当する銘柄がありません(見送り推奨)。</p>")+`</div>`};
+ return g("🔥 スイングトレード候補(数日〜2週間)","sw","20日線・RSI・MACDの改善、押し目を重視")+g("📅 1ヶ月トレード候補","mo","50日線・トレンドの継続性を重視")}
+
+function vHold(){const rows=HOLD.map((h,i)=>{const d=DATA.find(x=>x.code===h.code);if(!d)return`<tr><td>${esc(h.code)}</td><td colspan="5">データなし</td><td><button class="btn" data-del="${i}">削除</button></td></tr>`;
+ const a=an(d.p),pl=(a.last/h.cost-1)*100,rs=[];
+ if(pl<=-8)rs.push("損切りライン(-8%)到達");if(a.last<a.s50)rs.push("50日線割れ");if(a.last<a.s20&&a.M.h<0)rs.push("短期トレンド悪化");if(a.r>75)rs.push("RSI過熱");
+ const v=pl<=-8||a.last<a.s50?"売り推奨":rs.length?"一部利確/注意":"保有継続";if(d.q&&d.q.status==="warn")rs.unshift("⚠データ要確認(判定の信頼度低)");
+ return`<tr><td>${d.code} ${esc(d.name)}</td><td>${h.q}</td><td>${f(h.cost,1)}</td><td>${f(a.last)}</td><td>${pc(pl)}</td><td><b class="${v==="保有継続"?"":"sell"}">${v}</b> <span class="mu">${rs.join("・")}</span></td><td><button class="btn" data-del="${i}">削除</button></td></tr>`}).join("");
+ return`<div class="card"><h2>保有銘柄の売り判定</h2><div class="row"><select id="hc">${DATA.map(d=>`<option value="${d.code}">${d.code} ${esc(d.name)}</option>`).join("")}</select><input id="hq" type="number" placeholder="株数"><input id="hp" type="number" placeholder="取得単価"><button class="btn p" id="hadd">追加</button></div></div>
+ <div class="card tbl">${HOLD.length?`<table><tr><th>銘柄</th><th>株数</th><th>取得</th><th>現値</th><th>損益</th><th>判定</th><th></th></tr>${rows}</table>`:"<p class='mu'>保有銘柄を追加すると、売った方がよい銘柄を判定します。</p>"}</div>`}
+
+function vChart(){const d=DATA[sel],p=d.p.slice(-100),n=p.length,s20=p.map((_,i)=>sma(d.p.slice(0,d.p.length-n+i+1),20)),s50=p.map((_,i)=>sma(d.p.slice(0,d.p.length-n+i+1),50));
+ const all=[...p,...s20.filter(Boolean),...s50.filter(Boolean)],mn=Math.min(...all),mx=Math.max(...all),W=640,H=260,X=i=>10+i*(W-20)/(n-1),Y=v=>H-10-(v-mn)/(mx-mn)*(H-20);
+ const pl=(a,c,w)=>`<polyline fill="none" stroke="${c}" stroke-width="${w}" points="${a.map((v,i)=>v==null?"":X(i)+","+Y(v)).filter(Boolean).join(" ")}"/>`;
+ const a=an(d.p);
+ return`<div class="card"><select id="cs">${DATA.map((x,i)=>`<option value="${i}" ${i===sel?"selected":""}>${x.code} ${esc(x.name)}</option>`).join("")}</select>
+ <svg viewBox="0 0 ${W} ${H}">${pl(p,"var(--tx)",2)}${pl(s20,"var(--up)",1.5)}${pl(s50,"var(--dn)",1.5)}</svg>
+ <p class="mu">黒:終値 / 赤:20日線 / 青:50日線(直近100日)</p>
+ <p>現値 ${f(a.last)}(${pc(a.chg)}) ・ RSI ${a.r.toFixed(0)} ・ MACD ${a.M.h>0?"買い優勢":"売り優勢"}<br>スイング ${a.sw}点 / 1ヶ月 ${a.mo}点</p></div>`}
+
+function vTool(){return`<div class="card"><h2>📲 スマホのホーム画面に追加</h2><p class="mu">iPhone:Safariで開き、共有ボタン → 「ホーム画面に追加」。Android:Chromeのメニュー → 「ホーム画面に追加」。アプリのように全画面で開け、オフラインでも前回のデータを表示できます。</p></div><div class="card"><h2>🧮 ポジションサイズ計算</h2><div class="row"><input id="k1" type="number" placeholder="資金(円)"><input id="k2" type="number" placeholder="許容損失(%) 例:1"><input id="k3" type="number" placeholder="買値"><input id="k4" type="number" placeholder="損切り価格"></div><p id="kout" class="mu">入力すると購入株数の目安を表示します。</p></div>
+ <div class="card"><h2>📥 株価データ取込(CSV)</h2><p class="mu">1行に「コード,名前,株価1,株価2,…」(古い順・60日分以上)。実データに置き換えられます。</p><textarea id="csv" rows="4" placeholder="7203,銘柄名,2500,2510,..."></textarea><div class="row" style="margin-top:8px"><button class="btn p" id="imp">取込</button><button class="btn" id="rst">サンプルに戻す</button></div></div>
+ <div class="card"><h2>💡 今後追加できる機能</h2><ul><li>実データ自動取得(株価API接続)</li><li>決算日・指標発表カレンダーと通知</li><li>売買記録と勝率・損益の集計</li><li>ニュースのAI要約とセクター別の強弱</li></ul></div>`}
+
+function bind(){const g=id=>document.getElementById(id);
+ if(g("memo"))g("memo").oninput=e=>{MEMO=e.target.value;store("memo",MEMO)};
+ if(g("cs"))g("cs").onchange=e=>{sel=+e.target.value;render()};
+ if(g("hadd"))g("hadd").onclick=()=>{const q=+g("hq").value,c=+g("hp").value;if(q>0&&c>0){HOLD.push({code:g("hc").value,q,cost:c});store("hold",HOLD);render()}};
+ document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{HOLD.splice(+b.dataset.del,1);store("hold",HOLD);render()});
+ if(g("k1")){const u=()=>{const[a,b,c,d]=["k1","k2","k3","k4"].map(i=>+g(i).value);g("kout").textContent=a&&b&&c&&d&&c>d?`購入株数の目安:${Math.floor(a*b/100/(c-d))}株(最大損失 約${f(a*b/100)}円)`:"入力すると購入株数の目安を表示します。"};["k1","k2","k3","k4"].forEach(i=>g(i).oninput=u)}
+ if(g("imp"))g("imp").onclick=()=>{const L=g("csv").value.trim().split("\n").map(l=>l.split(",").map(s=>s.trim())).filter(x=>x.length>62).map(x=>({code:x[0],name:x[1],p:x.slice(2).map(Number).filter(v=>v>0)}));if(L.length){DATA=L;store("data",DATA);sel=0;alert(L.length+"銘柄を取り込みました")}else alert("形式を確認してください(60日分以上の株価が必要です)")};
+ if(g("rst"))g("rst").onclick=()=>{try{localStorage.removeItem("data")}catch(e){}DATA=NAMES.map(([c,n],i)=>({code:c,name:n,p:gen(i*97+13)}));render()}}
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script></body></html>
